@@ -1,0 +1,16 @@
+Package: jp.r-plus.restoretabforsafari
+Name: RestoreTab for Safari
+Depends: firmware (>= 4.2), mobilesubstrate
+Conflicts: com.chpwn.covert
+Version: 1.2
+Architecture: iphoneos-arm
+Description: restore recently closed browser tab
+Maintainer: BigBoss <bigboss@thebigboss.org>
+Author: r_plus <anasthasia.r+restoretab@gmail.com>
+Section: Tweaks
+dev: rplus
+Priority: optional
+Sponsor: thebigboss.org <http://thebigboss.org>
+Depiction: http://moreinfo.thebigboss.org/moreinfo/depiction.php?file=restoretabforsafariData
+Homepage: http://moreinfo.thebigboss.org/moreinfo/depiction.php?file=restoretabforsafariData
+Tag: cydia::commercial, purpose::extension
