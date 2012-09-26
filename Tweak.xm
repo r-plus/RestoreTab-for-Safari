@@ -115,6 +115,11 @@ static inline void Alert(NSString *message)
     [fs release];
     [items release];
   } else { // iOS 5x
+/*    NSLog(@"frame = %@", NSStringFromCGRect([button frame]));*/
+    CGRect frame = ((UIView *)button).frame;
+    frame.origin.x = MSHookIvar<UIView *>(BC, "_pageView").frame.size.width / 2.0f - 20.0f;
+    ((UIView *)button).frame = frame;
+/*    NSLog(@"after frame = %@", NSStringFromCGRect([button frame]));*/
     tabs ? [buttonBar addSubview:button] : [button removeFromSuperview];  
   }
   
