@@ -2,7 +2,7 @@ Package: jp.r-plus.restoretabforsafari
 Name: RestoreTab for Safari
 Depends: firmware (>= 4.2), mobilesubstrate
 Conflicts: com.chpwn.covert
-Version: 1.2
+Version: 1.3
 Architecture: iphoneos-arm
 Description: restore recently closed browser tab
 Maintainer: BigBoss <bigboss@thebigboss.org>
