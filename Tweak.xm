@@ -32,12 +32,15 @@
 -(void)_updateBackForward;
 -(void)clearBackForwardCache;
 -(void)restoreBackForwardListFromDictionary;
+-(void)becameActive;
 -(void)_saveBackForwardListToDictionary;
 -(void)_setBackURL:(id)url;
 -(id)URL;
 @end
 
 @interface TabController : NSObject
+-(void)setActiveTabDocument:(id)document animated:(BOOL)animated;
+-(TabDocument *)activeTabDocument;
 -(void)clearBackForwardCaches;
 -(void)_updateDocumentIndex;
 -(void)animateAddNewTabDocument:(id)tab;
@@ -48,9 +51,14 @@
 -(void)showRestoreButton;
 @end
 
+@interface PagedTabExposeView : UIView
+@property(readonly, assign, nonatomic, getter=isShowing) BOOL showing;
+@end
+
 @interface UIApplication(restoretab)
 -(void)applicationOpenURL:(id)url;
 -(id)IURootViewController;
+-(void)restoreTabFromSleipnizer:(BOOL)arg;
 @end
 
 @interface RestoreSheet : NSObject <UIActionSheetDelegate>
