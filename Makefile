@@ -1,10 +1,12 @@
-ARCHS = armv7
-TARGET = iphone:6.0:4.2
+ARCHS = armv7 arm64
+TARGET = iphone:clang::4.2
 include theos/makefiles/common.mk
 
 TWEAK_NAME = RestoreTabforSafari
 RestoreTabforSafari_FILES = Tweak.xm
 RestoreTabforSafari_FRAMEWORKS = UIKit
-THEOS_INSTALL_KILL=MobileSafari
 
 include $(THEOS_MAKE_PATH)/tweak.mk
+
+after-install::
+	install.exec "killall -9 MobileSafari"

@@ -244,7 +244,7 @@ static inline void LoadURLFromStackThenMoveTab(id URL, BOOL fromSleipnizer)
     showingActionSheet = YES;
     RestoreSheet *rs = [[RestoreSheet alloc] init];
     UIActionSheet *sheet = [[UIActionSheet alloc] initWithTitle:nil delegate:rs cancelButtonTitle:nil destructiveButtonTitle:nil otherButtonTitles:nil];
-    [sheet setAlertSheetStyle:UIBarStyleBlackTranslucent];
+    sheet.actionSheetStyle = UIBarStyleBlackTranslucent;
     for (TabDocument *doc in [killedDocuments reverseObjectEnumerator])
       [sheet addButtonWithTitle:[doc title]];
     [sheet setCancelButtonIndex:[sheet addButtonWithTitle:@"Cancel"]];
@@ -293,7 +293,7 @@ static inline void LoadURLFromStackThenMoveTab(id URL, BOOL fromSleipnizer)
 %end
 
 @implementation RestoreSheet
-- (void)actionSheet:(UIActionSheet*)sheet clickedButtonAtIndex:(int)buttonIndex
+- (void)actionSheet:(UIActionSheet*)sheet clickedButtonAtIndex:(NSInteger)buttonIndex
 {
   if (buttonIndex != [sheet cancelButtonIndex]) {
     restoringStackNumber = ++buttonIndex;
