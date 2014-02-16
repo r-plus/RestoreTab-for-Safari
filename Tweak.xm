@@ -1,5 +1,5 @@
 #import <UIKit/UIKit.h>
-#import "Firmware.h"
+#import <Firmware.h>
 
 #define BC [%c(BrowserController) sharedBrowserController]
 //#define DEBUG
