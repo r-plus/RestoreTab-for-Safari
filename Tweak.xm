@@ -246,19 +246,21 @@ static inline void LoadURLFromStackThenMoveTab(id URL, BOOL fromSleipnizer)
 // button click or hold interface {{{
 %hook Application
 
-%group iOS_le_6
 %new
 - (void)restoreTab
 { 
-    id tabController = [BC tabController];
-    id tabExposeView = MSHookIvar<id>(tabController, "_tabExposeView");
-    /*  NSLog(@"isShowing = %@", [tabExposeView isShowing] ? @"YES" : @"NO");*/
-    if ([tabExposeView respondsToSelector:@selector(isShowing)] && [tabExposeView isShowing])
+    if (kCFCoreFoundationVersionNumber < kCFCoreFoundationVersionNumber_iOS_7_0) {
+        id tabController = [BC tabController];
+        id tabExposeView = MSHookIvar<id>(tabController, "_tabExposeView");
+        /*  NSLog(@"isShowing = %@", [tabExposeView isShowing] ? @"YES" : @"NO");*/
+        if ([tabExposeView respondsToSelector:@selector(isShowing)] && [tabExposeView isShowing])
+            [self restoreTabFromSleipnizer:NO];
+        else
+            [self restoreTabFromSleipnizer:YES];
+    } else {
         [self restoreTabFromSleipnizer:NO];
-    else
-        [self restoreTabFromSleipnizer:YES];
+    }
 }
-%end
 
 %new
 - (void)restoreTabFromSleipnizer:(BOOL)fromSleipnizer
