@@ -2,12 +2,18 @@
 #import <Firmware.h>
 
 #define BC [%c(BrowserController) sharedBrowserController]
-#define DEBUG
+//#define DEBUG 1
+#import <debug.h>
 
 // Headers {{{
 /////// for "RestoreTab" feature start
+@interface UIBarButtonItem()
+- (UIView *)view;
+@end
+
 @interface BrowserController : NSObject//WebUIController
 + (id)sharedBrowserController;
+- (id)_tiltedTabToolbar;
 - (void)loadURLInNewWindow:(id)url animated:(BOOL)animate;//ios4
 - (id)loadURLInNewWindow:(id)newWindow inBackground:(BOOL)background animated:(BOOL)animated;//ios5
 - (id)buttonBar;
@@ -41,6 +47,7 @@
 
 @interface TabController : NSObject
 - (void)setActiveTabDocument:(id)document animated:(BOOL)animated;
+- (void)_dismissTiltedTabView;
 - (TabDocument *)activeTabDocument;
 - (void)clearBackForwardCaches;
 - (void)_updateDocumentIndex;
@@ -77,7 +84,7 @@ static BOOL removingCurrentBackForwardItem = NO;
 static BOOL isFirmware4x;
 static BOOL isFirmware5Plus;
 static BOOL isFirmware6Plus;
-static BOOL hasEnhancedTabs;
+static BOOL hasEnhancedTabs = NO;
 static BOOL showingActionSheet = NO;
 static int restoringStackNumber;
 static id restoreButton = nil;// navigationButton for iPad 4.x
@@ -91,8 +98,30 @@ static inline void Alert(NSString *message)
     [av release];
 }
 
+// add invoke interface for iOS 7 {{{
+%group iOS_ge_7
+%hook BrowserController
+- (void)_initSubviews
+{
+    %orig;
+    UIToolbar *bar = [self _tiltedTabToolbar];
+    for (UIBarButtonItem *item in bar.items) {
+        Log(@"%@", item);
+        if (item.action == @selector(_addNewActiveTiltedTabViewTab)) {
+            // TODO: add longpress gesture
+            Log(@"this is + button");
+            UILongPressGestureRecognizer *holdGesture = [[UILongPressGestureRecognizer alloc] initWithTarget:[UIApplication sharedApplication] action:@selector(restoreButtonHeld:)];
+            [[item view] addGestureRecognizer:holdGesture];
+            [holdGesture release];
+            break;
+        }
+    }
+}
+%end
+%end
+//}}}
 // addSubview button for iPhone <= 6.x {{{
-%group restoreTabImageForiPhone
+%group iOS_le_6
 %hook BrowserController
 - (void)setShowingTabs:(BOOL)tabs
 {
@@ -180,8 +209,18 @@ static inline void Alert(NSString *message)
 %end
 ///////////////////////////////////////////end for iPad 4x }}}
 
+static inline void SwitchToTab(id tab)
+{
+    id bc = [objc_getClass("BrowserController") sharedBrowserController];
+    TabController *tabController = [bc tabController];
+    [tabController setActiveTabDocument:tab animated:NO];
+    [[tabController activeTabDocument] becameActive];
+    [bc updateInterface:YES];
+}
+
 static inline void LoadURLFromStackThenMoveTab(id URL, BOOL fromSleipnizer)
 {
+    Log(@"LoadURLFromStackThenMoveTab: URL = %@, fromSleipnizer = %d", URL, fromSleipnizer);
     restoringTab = YES;
     id bc = [objc_getClass("BrowserController") sharedBrowserController];
     restoredTab = nil;
@@ -190,21 +229,25 @@ static inline void LoadURLFromStackThenMoveTab(id URL, BOOL fromSleipnizer)
     else
         [bc loadURLInNewWindow:URL animated:NO];
 
-    if (isFirmware6Plus && !fromSleipnizer) {
+    // activate loaded tab.
+    if (isFirmware6Plus && kCFCoreFoundationVersionNumber < kCFCoreFoundationVersionNumber_iOS_7_0 && !fromSleipnizer) {
         id tabController = [bc tabController];
         id tabExposeView = MSHookIvar<id>(tabController, "_tabExposeView");
         [tabExposeView _updateDocumentIndex];
         [tabExposeView animateAddNewTabDocument:restoredTab];
 
-        [tabController setActiveTabDocument:restoredTab animated:NO];
-        [[tabController activeTabDocument] becameActive];
-        [bc updateInterface:YES];
+        SwitchToTab(restoredTab);
+    } else if (kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_7_0 && !fromSleipnizer) {
+        SwitchToTab(restoredTab);
+        id tabController = [bc tabController];
+        [tabController _dismissTiltedTabView];
     }
 }
 
 // button click or hold interface {{{
 %hook Application
 
+%group iOS_le_6
 %new
 - (void)restoreTab
 { 
@@ -216,6 +259,7 @@ static inline void LoadURLFromStackThenMoveTab(id URL, BOOL fromSleipnizer)
     else
         [self restoreTabFromSleipnizer:YES];
 }
+%end
 
 %new
 - (void)restoreTabFromSleipnizer:(BOOL)fromSleipnizer
@@ -229,11 +273,9 @@ static inline void LoadURLFromStackThenMoveTab(id URL, BOOL fromSleipnizer)
         return;
     }
 
-#ifdef DEBUG
-    NSLog(@"lastObject url=%@", [[killedDocuments lastObject] URLString]);
-    NSLog(@"killDocDict=%lu", (unsigned long)[killedDocumentsBackForwardDict count]);
-    NSLog(@"killDoc=%lu", (unsigned long)[killedDocuments count]);
-#endif
+    Log(@"lastObject url=%@", [[killedDocuments lastObject] URLString]);
+    Log(@"killDocDict=%lu", (unsigned long)[killedDocumentsBackForwardDict count]);
+    Log(@"killDoc=%lu", (unsigned long)[killedDocuments count]);
 
     restoringStackNumber = 1;
     LoadURLFromStackThenMoveTab([[killedDocuments lastObject] URL], fromSleipnizer);
@@ -246,6 +288,9 @@ static inline void LoadURLFromStackThenMoveTab(id URL, BOOL fromSleipnizer)
         Alert(@"Now restoring. Please wait little.");
         return;
     }
+    if (killedDocuments.count == 0)
+        return;
+
     if (!showingActionSheet) {
         showingActionSheet = YES;
         RestoreSheet *rs = [[RestoreSheet alloc] init];
@@ -255,11 +300,16 @@ static inline void LoadURLFromStackThenMoveTab(id URL, BOOL fromSleipnizer)
             [sheet addButtonWithTitle:[doc title]];
         [sheet setCancelButtonIndex:[sheet addButtonWithTitle:@"Cancel"]];
         /*    [sheet showInView:[self window]];*/
-        [sheet showInView:MSHookIvar<id>(BC, "_pageView")];
+        if (kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_7_0) {
+            [sheet showInView:MSHookIvar<id>(BC, "_rootView")];
+        } else {
+            [sheet showInView:MSHookIvar<id>(BC, "_pageView")];
+        }
         [sheet release];
     }
 }
 
+%group iOS_le_6
 - (void)applicationDidFinishLaunching:(UIApplication *)application
 {
     %orig;
@@ -297,6 +347,7 @@ static inline void LoadURLFromStackThenMoveTab(id URL, BOOL fromSleipnizer)
 #endif
 }
 %end
+%end
 // }}}
 
 // ActionSheet delegate {{{
@@ -304,13 +355,18 @@ static inline void LoadURLFromStackThenMoveTab(id URL, BOOL fromSleipnizer)
 - (void)actionSheet:(UIActionSheet*)sheet clickedButtonAtIndex:(NSInteger)buttonIndex
 {
     if (buttonIndex != [sheet cancelButtonIndex]) {
+        Log(@"restorering...");
         restoringStackNumber = ++buttonIndex;
         LoadURLFromStackThenMoveTab([[killedDocuments objectAtIndex:[killedDocuments count] - restoringStackNumber] URL], NO);
     }
 
     showingActionSheet = NO;  
-    [self release];
-    self = nil;
+    if (kCFCoreFoundationVersionNumber < kCFCoreFoundationVersionNumber_iOS_7_0) {
+        [self release];
+        self = nil;
+    } else {
+        [self autorelease];
+    }
 }
 @end
 // }}}
@@ -326,28 +382,30 @@ static inline void SaveBackForwardHistory(TabDocument *tab)
         }
         [button setEnabled:YES];
         [restoreButton setEnabled:YES];
-#ifdef DEBUG
-        NSLog(@"killDocDict=%lu", (unsigned long)[killedDocumentsBackForwardDict count]);
-        NSLog(@"killDoc=%lu", (unsigned long)[killedDocuments count]);
-#endif
+        Log(@"killDocDict=%lu", (unsigned long)[killedDocumentsBackForwardDict count]);
+        Log(@"killDoc=%lu", (unsigned long)[killedDocuments count]);
     }
 }
 
 %hook TabController//compatible Sleipnizer // (quick) + (go expose) + (afterShrink) // all support!
+%group iOS_ge_6
 - (void)closeTabDocument:(TabDocument *)tab animated:(BOOL)animated
 {
     SaveBackForwardHistory(tab);
     %orig;
 }
 %end
+%end
 
 %hook TabDocument
-// until iOS 6.
+%group iOS_le_5
+// until iOS <= 5.x.
 - (void)closeTabDocument // fast than above method.
 {
     SaveBackForwardHistory(self);
     %orig;
 }
+%end
 
 // }}}
 
@@ -357,10 +415,8 @@ static inline void SaveBackForwardHistory(TabDocument *tab)
 static inline void UpdateBackForward(TabDocument *self)
 {
     if (restoringTab) {
-#ifdef DEBUG
-        NSLog(@"update if in=%@", [self backForwardListDictionary]);
-        NSLog(@"removingCurrentBackForwardItem = YES");
-#endif
+        Log(@"update if in=%@", [self backForwardListDictionary]);
+        Log(@"removingCurrentBackForwardItem = YES");
         // this two is remove current backforwarditem.
         removingCurrentBackForwardItem = YES;
         if (!isFirmware6Plus)
@@ -369,13 +425,13 @@ static inline void UpdateBackForward(TabDocument *self)
             restoringTab = NO; // current(loaded url) history delete timing is changed in iOS 6. So change the restoringTab set to NO timing `currentItem` to this function for iOS 6.
 
         [self setBackForwardListDictionary:[killedDocumentsBackForwardDict objectAtIndex:[killedDocumentsBackForwardDict count] - restoringStackNumber]];
-        //NSLog(@"after setDict=%@", [self backForwardListDictionary]);
+        //Log(@"after setDict=%@", [self backForwardListDictionary]);
         [self restoreBackForwardListFromDictionary];
-        //NSLog(@"after restore=%@", [self backForwardListDictionary]);  
+        //Log(@"after restore=%@", [self backForwardListDictionary]);  
 
         if ([self respondsToSelector:@selector(_updateBackForward)])
             [self _updateBackForward];
-        //NSLog(@"after update=%@", [self backForwardListDictionary]);
+        //Log(@"after update=%@", [self backForwardListDictionary]);
         /*    id toolbar = MSHookIvar<id>(BC, "_buttonBar");*/
         /*    [toolbar updateButtonsAnimated:YES];*/
         if (isFirmware6Plus) {
@@ -385,33 +441,35 @@ static inline void UpdateBackForward(TabDocument *self)
 
         [killedDocumentsBackForwardDict removeObjectAtIndex:[killedDocumentsBackForwardDict count] - restoringStackNumber];
         [killedDocuments removeObjectAtIndex:[killedDocuments count] - restoringStackNumber];
-#ifdef DEBUG
-        NSLog(@"removed_killDocDict=%lu", (unsigned long)[killedDocumentsBackForwardDict count]);
-        NSLog(@"removed_killDoc=%lu", (unsigned long)[killedDocuments count]);
-#endif
+        Log(@"removed_killDocDict=%lu", (unsigned long)[killedDocumentsBackForwardDict count]);
+        Log(@"removed_killDoc=%lu", (unsigned long)[killedDocuments count]);
     }
 }
 
 // this method until iOS 5
+%group iOS_le_5
 - (void)_updateBackForward
 {
     %orig;
     UpdateBackForward(self);
 }
 %end
+%end
 
 // new _updateBackForward in iOS 6!
+%group iOS_ge_6
 %hook WebUIBrowserLoadingController
 - (void)_updateBackForward
 {
     %orig;
     /*  UpdateBackForward([[[BC tabController] tabDocuments] lastObject]);*/
     /*  for (TabDocument *tab in [[BC tabController] tabDocuments]) {*/
-    /*    NSLog(@"tab = %@, title = %@", tab, [tab title]);*/
+    /*    Log(@"tab = %@, title = %@", tab, [tab title]);*/
     /*  }*/
-    /*  NSLog(@"restoredTab = %@, title = %@", restoredTab, [restoredTab title]);*/
+    /*  Log(@"restoredTab = %@, title = %@", restoredTab, [restoredTab title]);*/
     UpdateBackForward(restoredTab);
 }
+%end
 %end
 // }}}
 
@@ -421,28 +479,23 @@ static inline void UpdateBackForward(TabDocument *self)
 %hook WebBackForwardList
 - (id)currentItem
 {
-#ifdef DEBUG
-    %log;
-    NSLog(@"current =%@", [self dictionaryRepresentation]);
-#endif
+    Log(@"current =%@", [self dictionaryRepresentation]);
     if (removingCurrentBackForwardItem) {
-        //NSLog(@"before removeItem=%@", [self dictionaryRepresentation]);
+        //Log(@"before removeItem=%@", [self dictionaryRepresentation]);
         if (!isFirmware6Plus) {
             [self removeItem:[self itemAtIndex:0]];
             restoringTab = NO; // set to NO timing changed since iOS6. goto UpdateBackForward function.
         }
-        //NSLog(@"after removeItem=%@", [self dictionaryRepresentation]);
+        //Log(@"after removeItem=%@", [self dictionaryRepresentation]);
         removingCurrentBackForwardItem = NO;
-#ifdef DEBUG
-        NSLog(@"removingCurrentBackForwardItem = NO;");
-#endif
+        Log(@"removingCurrentBackForwardItem = NO;");
     }
 
     // remove loaded url history for iOS 6.
     if (isFirmware6Plus && restoringTab) {
-        //NSLog(@"IOS6!!!! before removeItem=%@", [self dictionaryRepresentation]);
+        //Log(@"IOS6!!!! before removeItem=%@", [self dictionaryRepresentation]);
         [self removeItem:[self itemAtIndex:0]];
-        //NSLog(@"IOS&!!!! after removeItem=%@", [self dictionaryRepresentation]);
+        //Log(@"IOS&!!!! after removeItem=%@", [self dictionaryRepresentation]);
     }
     return %orig;
 }
@@ -458,16 +511,25 @@ static inline void UpdateBackForward(TabDocument *self)
         isFirmware5Plus = (kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_5_0) ? YES : NO;
         isFirmware6Plus = (kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_6_0) ? YES : NO;
 
-        dlopen("/Library/MobileSubstrate/DynamicLibraries/EnhancedTabs.dylib", RTLD_LAZY);
-        Class $TabHandler = objc_getClass("TabHandler");
-        hasEnhancedTabs = (class_getInstanceMethod($TabHandler, @selector(closeTabs:)) != NULL);
+        if (kCFCoreFoundationVersionNumber < kCFCoreFoundationVersionNumber_iOS_7_0) {
+            dlopen("/Library/MobileSubstrate/DynamicLibraries/EnhancedTabs.dylib", RTLD_LAZY);
+            Class $TabHandler = objc_getClass("TabHandler");
+            hasEnhancedTabs = (class_getInstanceMethod($TabHandler, @selector(closeTabs:)) != NULL);
+        }
 
         %init;
         if (isPad) {
             if (!isFirmware5Plus)
                 %init(restoreTabForiPad);
         } else {
-            %init(restoreTabImageForiPhone);
+            if (kCFCoreFoundationVersionNumber < kCFCoreFoundationVersionNumber_iOS_6_0)
+                %init(iOS_le_5);
+            if (kCFCoreFoundationVersionNumber < kCFCoreFoundationVersionNumber_iOS_7_0)
+                %init(iOS_le_6);
+            if (kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_6_0)
+                %init(iOS_ge_6);
+            if (kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_7_0)
+                %init(iOS_ge_7);
         }
     }
 }
