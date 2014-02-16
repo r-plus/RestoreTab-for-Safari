@@ -453,10 +453,12 @@ static inline void SaveBackForwardHistory(TabDocument *tab)
             [killedDocuments addObject:tab];
             [killedDocumentsBackForwardDict addObject:[tab backForwardListDictionary]];
         }
-        [button setEnabled:YES];
-        [restoreButton setEnabled:YES];
-        Log(@"killDocDict=%lu", (unsigned long)[killedDocumentsBackForwardDict count]);
-        Log(@"killDoc=%lu", (unsigned long)[killedDocuments count]);
+        if (kCFCoreFoundationVersionNumber < kCFCoreFoundationVersionNumber_iOS_7_0) {
+            [button setEnabled:YES];
+            [restoreButton setEnabled:YES];
+            Log(@"killDocDict=%lu", (unsigned long)[killedDocumentsBackForwardDict count]);
+            Log(@"killDoc=%lu", (unsigned long)[killedDocuments count]);
+        }
     }
 }
 
