@@ -85,7 +85,6 @@ static BOOL isFirmware4x;
 static BOOL isFirmware5Plus;
 static BOOL isFirmware6Plus;
 static BOOL hasEnhancedTabs = NO;
-static BOOL showingActionSheet = NO;
 static int restoringStackNumber;
 static id restoreButton = nil;// navigationButton for iPad 4.x
 static TabDocument *restoredTab = nil;
@@ -284,6 +283,8 @@ static inline void LoadURLFromStackThenMoveTab(id URL, BOOL fromSleipnizer)
 %new
 - (void)restoreButtonHeld:(UILongPressGestureRecognizer *)sender
 {
+    if (sender.state != UIGestureRecognizerStateBegan)
+        return;
     if (restoringTab) {
         Alert(@"Now restoring. Please wait little.");
         return;
@@ -291,22 +292,19 @@ static inline void LoadURLFromStackThenMoveTab(id URL, BOOL fromSleipnizer)
     if (killedDocuments.count == 0)
         return;
 
-    if (!showingActionSheet) {
-        showingActionSheet = YES;
-        RestoreSheet *rs = [[RestoreSheet alloc] init];
-        UIActionSheet *sheet = [[UIActionSheet alloc] initWithTitle:nil delegate:rs cancelButtonTitle:nil destructiveButtonTitle:nil otherButtonTitles:nil];
-        sheet.actionSheetStyle = UIBarStyleBlackTranslucent;
-        for (TabDocument *doc in [killedDocuments reverseObjectEnumerator])
-            [sheet addButtonWithTitle:[doc title]];
-        [sheet setCancelButtonIndex:[sheet addButtonWithTitle:@"Cancel"]];
-        /*    [sheet showInView:[self window]];*/
-        if (kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_7_0) {
-            [sheet showInView:MSHookIvar<id>(BC, "_rootView")];
-        } else {
-            [sheet showInView:MSHookIvar<id>(BC, "_pageView")];
-        }
-        [sheet release];
+    RestoreSheet *rs = [[RestoreSheet alloc] init];
+    UIActionSheet *sheet = [[UIActionSheet alloc] initWithTitle:nil delegate:rs cancelButtonTitle:nil destructiveButtonTitle:nil otherButtonTitles:nil];
+    sheet.actionSheetStyle = UIBarStyleBlackTranslucent;
+    for (TabDocument *doc in [killedDocuments reverseObjectEnumerator])
+        [sheet addButtonWithTitle:[doc title]];
+    [sheet setCancelButtonIndex:[sheet addButtonWithTitle:@"Cancel"]];
+    /*    [sheet showInView:[self window]];*/
+    if (kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_7_0) {
+        [sheet showInView:MSHookIvar<id>(BC, "_rootView")];
+    } else {
+        [sheet showInView:MSHookIvar<id>(BC, "_pageView")];
     }
+    [sheet release];
 }
 
 %group iOS_le_6
@@ -360,7 +358,6 @@ static inline void LoadURLFromStackThenMoveTab(id URL, BOOL fromSleipnizer)
         LoadURLFromStackThenMoveTab([[killedDocuments objectAtIndex:[killedDocuments count] - restoringStackNumber] URL], NO);
     }
 
-    showingActionSheet = NO;  
     if (kCFCoreFoundationVersionNumber < kCFCoreFoundationVersionNumber_iOS_7_0) {
         [self release];
         self = nil;
