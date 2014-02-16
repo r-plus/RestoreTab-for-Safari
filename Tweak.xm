@@ -4,6 +4,7 @@
 #define BC [%c(BrowserController) sharedBrowserController]
 //#define DEBUG
 
+// Headers {{{
 /////// for "RestoreTab" feature start
 @interface BrowserController : NSObject//WebUIController
 + (id)sharedBrowserController;
@@ -63,7 +64,9 @@
 
 @interface RestoreSheet : NSObject <UIActionSheetDelegate>
 @end
+// }}}
 
+// global var {{{
 static id button = nil;
 static id buttonBar = nil;
 static NSMutableArray *killedDocuments = [[NSMutableArray alloc] init];
@@ -79,6 +82,7 @@ static BOOL showingActionSheet = NO;
 static int restoringStackNumber;
 static id restoreButton = nil;// navigationButton for iPad 4.x
 static TabDocument *restoredTab = nil;
+// }}}
 
 static inline void Alert(NSString *message)
 {
@@ -87,9 +91,10 @@ static inline void Alert(NSString *message)
     [av release];
 }
 
+// addSubview button for iPhone <= 6.x {{{
 %group restoreTabImageForiPhone
 %hook BrowserController
--(void)setShowingTabs:(BOOL)tabs
+- (void)setShowingTabs:(BOOL)tabs
 {
     if ([killedDocuments count] == 0)
         [button setEnabled:NO];
@@ -134,9 +139,8 @@ static inline void Alert(NSString *message)
     %orig;
 }
 %end
-%end
-
-///////////////////////////////////////////for iPad 4x
+%end // }}}
+///////////////////////////////////////////for iPad 4x {{{
 %group restoreTabForiPad
 %hook GridTabExposeView//:UIView
 
@@ -174,9 +178,7 @@ static inline void Alert(NSString *message)
 }
 %end
 %end
-///////////////////////////////////////////end for iPad 4x
-
-%hook Application
+///////////////////////////////////////////end for iPad 4x }}}
 
 static inline void LoadURLFromStackThenMoveTab(id URL, BOOL fromSleipnizer)
 {
@@ -199,6 +201,9 @@ static inline void LoadURLFromStackThenMoveTab(id URL, BOOL fromSleipnizer)
         [bc updateInterface:YES];
     }
 }
+
+// button click or hold interface {{{
+%hook Application
 
 %new
 - (void)restoreTab
@@ -292,7 +297,9 @@ static inline void LoadURLFromStackThenMoveTab(id URL, BOOL fromSleipnizer)
 #endif
 }
 %end
+// }}}
 
+// ActionSheet delegate {{{
 @implementation RestoreSheet
 - (void)actionSheet:(UIActionSheet*)sheet clickedButtonAtIndex:(NSInteger)buttonIndex
 {
@@ -306,8 +313,9 @@ static inline void LoadURLFromStackThenMoveTab(id URL, BOOL fromSleipnizer)
     self = nil;
 }
 @end
+// }}}
 
-/////////////////////////////////////// add close tab document and update historys hook methods.
+// backup close tab document and update historys hook methods. {{{
 
 static inline void SaveBackForwardHistory(TabDocument *tab)
 {
@@ -335,13 +343,15 @@ static inline void SaveBackForwardHistory(TabDocument *tab)
 
 %hook TabDocument
 // until iOS 6.
--(void)closeTabDocument // fast than above method.
+- (void)closeTabDocument // fast than above method.
 {
     SaveBackForwardHistory(self);
     %orig;
 }
 
-// restore the BackForward History!
+// }}}
+
+// restore the BackForward History! {{{
 /////////////////////////////////////////////////////////////////////////////
 
 static inline void UpdateBackForward(TabDocument *self)
@@ -403,8 +413,9 @@ static inline void UpdateBackForward(TabDocument *self)
     UpdateBackForward(restoredTab);
 }
 %end
+// }}}
 
-// current ( loaded url ) history delete.
+// current ( loaded url ) history delete. {{{
 /////////////////////////////////////////////////////////////////////////////
 
 %hook WebBackForwardList
@@ -436,7 +447,7 @@ static inline void UpdateBackForward(TabDocument *self)
     return %orig;
 }
 %end
-
+// }}}
 
 ///////////////////// Constructor
 %ctor
@@ -461,3 +472,4 @@ static inline void UpdateBackForward(TabDocument *self)
     }
 }
 
+/* vim: set fdm=marker : */
