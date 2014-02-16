@@ -6,9 +6,19 @@
 #import <debug.h>
 
 // Headers {{{
+static inline void LoadURLFromStackThenMoveTab(id URL, BOOL fromSleipnizer);
 /////// for "RestoreTab" feature start
 @interface UIBarButtonItem()
 - (UIView *)view;
+@end
+
+@interface CloudTabDevice : NSObject
+@property(readonly, nonatomic) NSArray *tabs;
+- (id)_initWithDictionary:(id)arg1 UUID:(id)arg2;
+@end
+
+@interface CloudTabHeaderView : UIView
+@property(copy, nonatomic) NSString *text;
 @end
 
 @interface BrowserController : NSObject//WebUIController
@@ -47,6 +57,7 @@
 
 @interface TabController : NSObject
 - (void)setActiveTabDocument:(id)document animated:(BOOL)animated;
+- (void)_updateTiltedTabViewCloudTabs;
 - (void)_dismissTiltedTabView;
 - (TabDocument *)activeTabDocument;
 - (void)clearBackForwardCaches;
@@ -76,6 +87,7 @@
 // global var {{{
 static id button = nil;
 static id buttonBar = nil;
+// stored many TabDocument objects.
 static NSMutableArray *killedDocuments = [[NSMutableArray alloc] init];
 static NSMutableArray *killedDocumentsBackForwardDict = [[NSMutableArray alloc] init];
 
@@ -116,8 +128,70 @@ static inline void Alert(NSString *message)
         }
     }
 }
-%end
-%end
+%end //End of Browsercontroller hook
+
+/*
+   DeviceName = i5;
+   LastModified = "2014-02-11 11:25:47 +0000";
+   Tabs =     (
+       {
+           Title = Apple;
+           URL = "http://www.apple.com/";
+       },
+       ...
+   );
+*/
+%hook TiltedTabView
+static NSUInteger originalCloudItemCount;
+// NSArray[CloudTabDevice,...]
+- (void)setCloudTabDevices:(NSArray *)devices
+{
+    if (killedDocuments.count == 0)
+        return %orig;
+
+    NSMutableArray *array = [NSMutableArray array];
+    for (TabDocument *tab in [killedDocuments reverseObjectEnumerator])
+        [array addObject:@{@"Title":[tab title], @"URL":[tab URLString]}];
+
+    originalCloudItemCount = devices.count;
+    for (CloudTabDevice *i in devices)
+        originalCloudItemCount += [[i tabs] count];
+    Log(@"originalCloudItemCount = %ld", originalCloudItemCount);
+
+    id restoreTabDevice = [[%c(CloudTabDevice) alloc] _initWithDictionary:@{@"DeviceName":@"RestoreTab", @"LastModified":[NSDate date], @"Tabs":[NSArray arrayWithArray:array]} UUID:@"X"];
+    %orig([devices arrayByAddingObject:restoreTabDevice]);
+}
+
+// arg = CloudTabItemView
+- (void)_didSelectCloudTabItemView:(id)arg1
+{
+    NSUInteger selectedCloudTabIndex = [MSHookIvar<NSMutableArray *>(self, "_cloudTabViews") indexOfObject:arg1];
+    Log(@"selectedCloudTabIndex = %ld", (unsigned long)selectedCloudTabIndex);
+    Log(@"originalCloudItemCount = %ld", (unsigned long)originalCloudItemCount);
+    if (killedDocuments.count && selectedCloudTabIndex > originalCloudItemCount) {
+        if (restoringTab || selectedCloudTabIndex - originalCloudItemCount > killedDocuments.count) {
+            Alert(@"Now restoring. Please wait little.");
+            return;
+        }
+        restoringStackNumber = selectedCloudTabIndex - originalCloudItemCount;
+        LoadURLFromStackThenMoveTab([[killedDocuments objectAtIndex:[killedDocuments count] - restoringStackNumber] URL], NO);
+    } else {
+        %orig;
+    }
+}
+%end // End of TiltedTabView hook
+
+%hook CloudTabHeaderView
+- (void)setText:(NSString *)text
+{
+    %orig;
+    if ([self.text isEqualToString:@"RestoreTab"]) {
+        UIImageView *&_icon = MSHookIvar<UIImageView *>(self, "_icon");
+        _icon.image = [UIImage imageNamed:@"RestoreTab"];
+    }
+}
+%end // End of CloudTabHeaderView
+%end // End of group
 //}}}
 // addSubview button for iPhone <= 6.x {{{
 %group iOS_le_6
@@ -392,6 +466,8 @@ static inline void SaveBackForwardHistory(TabDocument *tab)
 {
     SaveBackForwardHistory(tab);
     %orig;
+    if ([self respondsToSelector:@selector(_updateTiltedTabViewCloudTabs)])
+        [self _updateTiltedTabViewCloudTabs];
 }
 %end
 %end
@@ -442,6 +518,10 @@ static inline void UpdateBackForward(TabDocument *self)
         [killedDocuments removeObjectAtIndex:[killedDocuments count] - restoringStackNumber];
         Log(@"removed_killDocDict=%lu", (unsigned long)[killedDocumentsBackForwardDict count]);
         Log(@"removed_killDoc=%lu", (unsigned long)[killedDocuments count]);
+
+        TabController *tabController = [BC tabController];
+        if ([tabController respondsToSelector:@selector(_updateTiltedTabViewCloudTabs)])
+            [tabController _updateTiltedTabViewCloudTabs];
     }
 }
 
