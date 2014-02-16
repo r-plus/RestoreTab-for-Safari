@@ -2,7 +2,7 @@
 #import <Firmware.h>
 
 #define BC [%c(BrowserController) sharedBrowserController]
-//#define DEBUG
+#define DEBUG
 
 // Headers {{{
 /////// for "RestoreTab" feature start
@@ -231,8 +231,8 @@ static inline void LoadURLFromStackThenMoveTab(id URL, BOOL fromSleipnizer)
 
 #ifdef DEBUG
     NSLog(@"lastObject url=%@", [[killedDocuments lastObject] URLString]);
-    NSLog(@"killDocDict=%d", [killedDocumentsBackForwardDict count]);
-    NSLog(@"killDoc=%d", [killedDocuments count]);
+    NSLog(@"killDocDict=%lu", (unsigned long)[killedDocumentsBackForwardDict count]);
+    NSLog(@"killDoc=%lu", (unsigned long)[killedDocuments count]);
 #endif
 
     restoringStackNumber = 1;
@@ -327,8 +327,8 @@ static inline void SaveBackForwardHistory(TabDocument *tab)
         [button setEnabled:YES];
         [restoreButton setEnabled:YES];
 #ifdef DEBUG
-        NSLog(@"killDocDict=%d", [killedDocumentsBackForwardDict count]);
-        NSLog(@"killDoc=%d", [killedDocuments count]);
+        NSLog(@"killDocDict=%lu", (unsigned long)[killedDocumentsBackForwardDict count]);
+        NSLog(@"killDoc=%lu", (unsigned long)[killedDocuments count]);
 #endif
     }
 }
@@ -386,8 +386,8 @@ static inline void UpdateBackForward(TabDocument *self)
         [killedDocumentsBackForwardDict removeObjectAtIndex:[killedDocumentsBackForwardDict count] - restoringStackNumber];
         [killedDocuments removeObjectAtIndex:[killedDocuments count] - restoringStackNumber];
 #ifdef DEBUG
-        NSLog(@"removed_killDocDict=%d", [killedDocumentsBackForwardDict count]);
-        NSLog(@"removed_killDoc=%d", [killedDocuments count]);
+        NSLog(@"removed_killDocDict=%lu", (unsigned long)[killedDocumentsBackForwardDict count]);
+        NSLog(@"removed_killDoc=%lu", (unsigned long)[killedDocuments count]);
 #endif
     }
 }
