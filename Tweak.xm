@@ -194,7 +194,7 @@ static NSUInteger originalCloudItemCount;
 %end // End of group
 //}}}
 // addSubview button for iPhone <= 6.x {{{
-%group iOS_le_6
+%group iOS_le_6_for_iPhone
 %hook BrowserController
 - (void)setShowingTabs:(BOOL)tabs
 {
@@ -319,6 +319,7 @@ static inline void LoadURLFromStackThenMoveTab(id URL, BOOL fromSleipnizer)
 
 // button click or hold interface {{{
 %hook Application
+%group All
 
 %new
 - (void)restoreTab
@@ -382,6 +383,7 @@ static inline void LoadURLFromStackThenMoveTab(id URL, BOOL fromSleipnizer)
     }
     [sheet release];
 }
+%end
 
 %group iOS_le_6
 - (void)applicationDidFinishLaunching:(UIApplication *)application
@@ -557,6 +559,7 @@ static inline void UpdateBackForward(TabDocument *self)
 // current ( loaded url ) history delete. {{{
 /////////////////////////////////////////////////////////////////////////////
 
+%group All
 %hook WebBackForwardList
 - (id)currentItem
 {
@@ -581,6 +584,7 @@ static inline void UpdateBackForward(TabDocument *self)
     return %orig;
 }
 %end
+%end
 // }}}
 
 ///////////////////// Constructor
@@ -598,15 +602,18 @@ static inline void UpdateBackForward(TabDocument *self)
             hasEnhancedTabs = (class_getInstanceMethod($TabHandler, @selector(closeTabs:)) != NULL);
         }
 
-        %init;
+        %init(All);
+        if (kCFCoreFoundationVersionNumber < kCFCoreFoundationVersionNumber_iOS_6_0)
+            %init(iOS_le_5);
+        if (kCFCoreFoundationVersionNumber < kCFCoreFoundationVersionNumber_iOS_7_0)
+            %init(iOS_le_6);
+
         if (isPad) {
             if (!isFirmware5Plus)
                 %init(restoreTabForiPad);
         } else {
-            if (kCFCoreFoundationVersionNumber < kCFCoreFoundationVersionNumber_iOS_6_0)
-                %init(iOS_le_5);
             if (kCFCoreFoundationVersionNumber < kCFCoreFoundationVersionNumber_iOS_7_0)
-                %init(iOS_le_6);
+                %init(iOS_le_6_for_iPhone);
             if (kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_6_0)
                 %init(iOS_ge_6);
             if (kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_7_0)
