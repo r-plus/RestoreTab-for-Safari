@@ -191,7 +191,23 @@ static NSUInteger originalCloudItemCount;
     }
 }
 %end // End of CloudTabHeaderView
-%end // End of group
+
+%hook CloudTabStore
+- (BOOL)cloudTabsAreEnabled
+{
+    BOOL tmp = %orig;
+    if (!tmp) {
+        NSFileManager *manager = [NSFileManager defaultManager];
+        NSString * const path = @"/var/mobile/Library/Preferences/jp.r-plus.RestoreTab";
+        if (![manager fileExistsAtPath:path]) {
+            [manager createFileAtPath:path contents:nil attributes:nil];
+            Alert(@"RestoreTab required iCloudTab for show newly recently closed tabs view. You can also invoke RestoreTab feature via long press add new tab ('+' mark) button.");
+        }
+    }
+    return tmp;
+}
+%end
+%end // End of group iOS_ge_7
 //}}}
 // addSubview button for iPhone <= 6.x {{{
 %group iOS_le_6_for_iPhone
