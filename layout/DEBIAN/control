@@ -1,6 +1,6 @@
 Package: jp.r-plus.restoretabforsafari
 Name: RestoreTab for Safari
-Depends: firmware (>= 4.2), mobilesubstrate, cy+model.iphone | cy+model.ipod | firmware (<= 4.9) 
+Depends: firmware (>= 4.2), mobilesubstrate, cy+model.iphone | cy+model.ipod | firmware (<< 5.0) 
 Conflicts: com.chpwn.covert
 Version: 1.4.1
 Architecture: iphoneos-arm
