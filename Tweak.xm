@@ -1,5 +1,6 @@
 #import <UIKit/UIKit.h>
 #import <Firmware.h>
+#import <ColorLog.h>
 
 #define BC [%c(BrowserController) sharedBrowserController]
 //#define DEBUG 1
@@ -12,7 +13,15 @@ static inline void LoadURLFromStackThenMoveTab(id URL, BOOL fromSleipnizer);
 - (UIView *)view;
 @end
 
+@interface CloudTab
+@end
+
+@interface CloudTabItemView : UIView
+- (CloudTab *)cloudTab;
+@end
+
 @interface CloudTabDevice : NSObject
+@property (nonatomic,readonly) NSString *name;
 @property(readonly, nonatomic) NSArray *tabs;
 - (id)_initWithDictionary:(id)arg1 UUID:(id)arg2;
 @end
@@ -52,6 +61,7 @@ static inline void LoadURLFromStackThenMoveTab(id URL, BOOL fromSleipnizer);
 - (void)becameActive;
 - (void)_saveBackForwardListToDictionary;
 - (void)_setBackURL:(id)url;
+- (void)loadCloudTab:(CloudTab *)arg1;
 - (id)URL;
 @end
 
@@ -163,20 +173,42 @@ static NSUInteger originalCloudItemCount;
 }
 
 // arg = CloudTabItemView
-- (void)_didSelectCloudTabItemView:(id)arg1
+- (void)_didSelectCloudTabItemView:(id)cloudTabItemView
 {
-    NSUInteger selectedCloudTabIndex = [MSHookIvar<NSMutableArray *>(self, "_cloudTabViews") indexOfObject:arg1];
-    Log(@"selectedCloudTabIndex = %ld", (unsigned long)selectedCloudTabIndex);
-    Log(@"originalCloudItemCount = %ld", (unsigned long)originalCloudItemCount);
-    if (killedDocuments.count && selectedCloudTabIndex > originalCloudItemCount) {
-        if (restoringTab || selectedCloudTabIndex - originalCloudItemCount > killedDocuments.count) {
-            Alert(@"Now restoring. Please wait little.");
-            return;
+    if (kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_7_1) {
+        // 7.1+
+        CloudTab *selectedCloudTab = [cloudTabItemView cloudTab];
+        NSArray *cloudTabDevices = MSHookIvar<NSArray *>(self, "_cloudTabDevices");
+        CloudTabDevice *lastDevice = [cloudTabDevices lastObject];
+        if ([[lastDevice name] isEqualToString:@"RestoreTab"]) {
+            NSUInteger selectedCloudTabIndex = 0;
+            for (CloudTab *cloudTab in lastDevice.tabs) {
+                if (cloudTab == selectedCloudTab) {
+                    //[RestoreSheet restoreTabFromCloudTab:selectedCloudTab];
+                    LoadURLFromStackThenMoveTab([[killedDocuments objectAtIndex:selectedCloudTabIndex] URL], NO);
+                    return;
+                }
+                selectedCloudTabIndex++;
+            }
+            %orig;
+        } else {
+            %orig;
         }
-        restoringStackNumber = selectedCloudTabIndex - originalCloudItemCount;
-        LoadURLFromStackThenMoveTab([[killedDocuments objectAtIndex:[killedDocuments count] - restoringStackNumber] URL], NO);
     } else {
-        %orig;
+        // 7.0 - 7.0.6
+        NSUInteger selectedCloudTabIndex = [MSHookIvar<NSMutableArray *>(self, "_cloudTabViews") indexOfObject:cloudTabItemView];
+        Log(@"selectedCloudTabIndex = %ld", (unsigned long)selectedCloudTabIndex);
+        Log(@"originalCloudItemCount = %ld", (unsigned long)originalCloudItemCount);
+        if (killedDocuments.count && selectedCloudTabIndex > originalCloudItemCount) {
+            if (restoringTab || selectedCloudTabIndex - originalCloudItemCount > killedDocuments.count) {
+                Alert(@"Now restoring. Please wait little.");
+                return;
+            }
+            restoringStackNumber = selectedCloudTabIndex - originalCloudItemCount;
+            LoadURLFromStackThenMoveTab([[killedDocuments objectAtIndex:[killedDocuments count] - restoringStackNumber] URL], NO);
+        } else {
+            %orig;
+        }
     }
 }
 %end // End of TiltedTabView hook
@@ -444,6 +476,18 @@ static inline void LoadURLFromStackThenMoveTab(id URL, BOOL fromSleipnizer)
 
 // ActionSheet delegate {{{
 @implementation RestoreSheet
++ (void)restoreTabFromCloudTab:(CloudTab *)cloudTab
+{
+    restoringTab = YES;
+
+    id bc = [objc_getClass("BrowserController") sharedBrowserController];
+    TabController *tabController = [bc tabController];
+    TabDocument *blankTab = [tabController _openBlankTabDocument];
+    [blankTab loadCloudTab:cloudTab];
+    [tabController _insertTabDocument:blankTab afterTabDocument:[tabController activeTabDocument] inBackground:YES animated:NO];
+    SwitchToTab(blankTab);
+}
+
 - (void)actionSheet:(UIActionSheet*)sheet clickedButtonAtIndex:(NSInteger)buttonIndex
 {
     if (buttonIndex != [sheet cancelButtonIndex]) {
