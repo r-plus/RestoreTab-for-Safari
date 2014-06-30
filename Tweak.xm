@@ -184,8 +184,9 @@ static NSUInteger originalCloudItemCount;
             NSUInteger selectedCloudTabIndex = 0;
             for (CloudTab *cloudTab in lastDevice.tabs) {
                 if (cloudTab == selectedCloudTab) {
-                    //[RestoreSheet restoreTabFromCloudTab:selectedCloudTab];
-                    LoadURLFromStackThenMoveTab([[killedDocuments objectAtIndex:selectedCloudTabIndex] URL], NO);
+                    // set restoringStackNumber is must need! This is global var!
+                    restoringStackNumber = ++selectedCloudTabIndex;
+                    LoadURLFromStackThenMoveTab([[killedDocuments objectAtIndex:[killedDocuments count] - restoringStackNumber] URL], NO);
                     return;
                 }
                 selectedCloudTabIndex++;
@@ -476,18 +477,6 @@ static inline void LoadURLFromStackThenMoveTab(id URL, BOOL fromSleipnizer)
 
 // ActionSheet delegate {{{
 @implementation RestoreSheet
-+ (void)restoreTabFromCloudTab:(CloudTab *)cloudTab
-{
-    restoringTab = YES;
-
-    id bc = [objc_getClass("BrowserController") sharedBrowserController];
-    TabController *tabController = [bc tabController];
-    TabDocument *blankTab = [tabController _openBlankTabDocument];
-    [blankTab loadCloudTab:cloudTab];
-    [tabController _insertTabDocument:blankTab afterTabDocument:[tabController activeTabDocument] inBackground:YES animated:NO];
-    SwitchToTab(blankTab);
-}
-
 - (void)actionSheet:(UIActionSheet*)sheet clickedButtonAtIndex:(NSInteger)buttonIndex
 {
     if (buttonIndex != [sheet cancelButtonIndex]) {
@@ -578,11 +567,13 @@ static inline void UpdateBackForward(TabDocument *self)
             [loadingController _updateBackForward];
         }
 
+        // Remove restored tab information from stack.
         [killedDocumentsBackForwardDict removeObjectAtIndex:[killedDocumentsBackForwardDict count] - restoringStackNumber];
         [killedDocuments removeObjectAtIndex:[killedDocuments count] - restoringStackNumber];
         Log(@"removed_killDocDict=%lu", (unsigned long)[killedDocumentsBackForwardDict count]);
         Log(@"removed_killDoc=%lu", (unsigned long)[killedDocuments count]);
 
+        // update iCloudTab
         TabController *tabController = [BC tabController];
         if ([tabController respondsToSelector:@selector(_updateTiltedTabViewCloudTabs)])
             [tabController _updateTiltedTabViewCloudTabs];
